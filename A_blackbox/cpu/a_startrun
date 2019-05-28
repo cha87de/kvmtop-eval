@@ -1,0 +1,4 @@
+#!/bin/bash
+rancher-compose rm -f
+rancher-compose up -d -c -u -p
+date >> runs.log

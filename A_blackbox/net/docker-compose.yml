@@ -1,0 +1,17 @@
+version: '2'
+services:
+  stress:
+    privileged: true
+    image: cha87de/stresser
+    stdin_open: true
+    #entrypoint:
+    #- /bin/bash
+    command: "/bin/bash -c 'net-read'"
+    network_mode: host
+    volumes:
+    - /dev:/dev
+    tty: true
+    pid: host
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.start_once: 'true'

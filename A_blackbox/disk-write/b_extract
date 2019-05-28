@@ -1,0 +1,61 @@
+#!/bin/bash
+#set -x
+source /usr/local/bin/log
+source /usr/local/bin/retry
+source ../../lib/config.sh
+source ../../lib/influx/query.sh
+
+function dumpInfluxData(){
+    nr=$1
+    start=$2
+    end=$3
+
+    # kvmtop
+    log "... export kvmtop"
+    query="SELECT mean(\"io_write_bytes\")/1024/1024 AS \"mean_io_write_bytes\" FROM \"kvmtop\".\"autogen\".\"kvmtop.domains\" WHERE time >= ${start}s AND time <= ${end}s GROUP BY time(1s), \"UUID\" FILL(null)"
+    influx_query "$query" > ./data/${nr}-kvmtop.csv
+
+    # telegraf
+    log "... export telegraf"
+    query="SELECT derivative(last(\"write_bytes\"), 1s)/1024/1024 AS \"write_bytes\" FROM \"telegraf\".\"autogen\".\"diskio\" WHERE time >= ${start}s AND time <= ${end}s GROUP BY time(1s), \"host\" FILL(null)"
+    influx_query "$query" > ./data/${nr}-telegraf.csv
+}
+
+function cleanInfluxData(){
+    nr=$1
+
+    fileKvmtop="./data/${nr}-kvmtop.csv"
+    fileTelegraf="./data/${nr}-telegraf.csv"
+
+    cat $fileKvmtop | tail -n+3 | cut -d',' -f4 > /tmp/data-kvmtop
+    cat $fileTelegraf | tail -n+3 | cut -d',' -f4 > /tmp/data-telegraf
+
+    ../../lib/subtractcsv.py /tmp/data-kvmtop /tmp/data-telegraf > ./data/${nr}-diffs.csv
+}
+
+function main(){
+
+    mkdir -p ./data
+
+    let n=0
+    files=""
+    while read row; do
+        start=$(date +%s -d"$row")
+        end=$(echo "$start + 30" | bc)
+
+        log "Handle run from $(date -d@${start}) to $(date -d@${end})"
+        #dumpInfluxData $n $start $end
+        #cleanInfluxData $n
+        files="$files ./data/${n}-diffs.csv"
+        let n=$n+1
+    done <./runs.log
+
+    # calculate avg over all runs
+    ../../lib/avgcsv.py $files > result.csv
+
+    # plot averages
+    ./plot
+
+}
+
+main $@

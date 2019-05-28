@@ -1,0 +1,83 @@
+#!/bin/bash
+#set -x
+source /usr/local/bin/log
+source /usr/local/bin/retry
+source ../../lib/config.sh
+source ../../lib/influx/query.sh
+
+function dumpInfluxData(){
+    nr=$1
+    start=$2
+    end=$3
+
+    # kvmtop
+    log "... export kvmtop"
+    query="SELECT mean(\"io_read_bytes\")/1024/1024 AS \"mean_io_read_bytes\" FROM \"kvmtop\".\"autogen\".\"kvmtop.domains\" WHERE time >= ${start}s AND time <= ${end}s GROUP BY time(1s), \"UUID\" FILL(null)"
+    influx_query "$query" > ./data/${nr}-kvmtop.csv
+
+    # telegraf
+    log "... export telegraf"
+    query="SELECT derivative(last(\"read_bytes\"), 1s)/1024/1024 AS \"read_bytes\" FROM \"telegraf\".\"autogen\".\"diskio\" WHERE time >= ${start}s AND time <= ${end}s GROUP BY time(1s), \"host\" FILL(null)"
+    influx_query "$query" > ./data/${nr}-telegraf.csv
+}
+
+function cleanInfluxData(){
+    nr=$1
+
+    fileKvmtop="./data/${nr}-kvmtop.csv"
+    fileTelegraf="./data/${nr}-telegraf.csv"
+
+    cat $fileKvmtop | tail -n+3 | cut -d',' -f4 > /tmp/data-kvmtop
+    cat $fileTelegraf | tail -n+3 | cut -d',' -f4 > /tmp/data-telegraf
+
+    ../../lib/subtractcsv.py /tmp/data-kvmtop /tmp/data-telegraf > ./data/${nr}-diffs.csv
+}
+
+function plotEach(){
+    nr=$1
+    echo "set term png size 1500,900
+    set output 'data/diff-$nr.png'
+    #x axis formatting
+    set xlabel 'Time'
+    #set xdata time
+    #set timefmt \"%s\"
+    #set format x \"%H:%M:%S\"
+    #y axis formatting
+    set ylabel 'Disk Reads [MB/s]'
+    # styles
+    set style line 1 lt 1 lw 2 lc rgb \"#3a3a3a\"
+    set style line 2 lt 2 lw 1 lc rgb \"#aaaaaa\"
+    set autoscale
+    plot './data/$nr-diffs.csv' using :1 with lines ls 1 title 'Diff'
+    " | gnuplot
+}
+
+function main(){
+
+    mkdir -p ./data
+
+    let n=0
+    files=""
+    while read row; do
+        start=$(date +%s -d"$row")
+        end=$(echo "$start + 30" | bc)
+
+        log "Handle run from $(date -d@${start}) to $(date -d@${end})"
+        #dumpInfluxData $n $start $end
+        #cleanInfluxData $n
+
+        plotEach $n
+
+        files="$files ./data/${n}-diffs.csv"
+        let n=$n+1
+    done <./runs.log
+
+    # calculate avg over all runs
+    ../../lib/avgcsv.py $files > result.csv
+
+    # plot averages
+    ./plot
+
+}
+
+main $@

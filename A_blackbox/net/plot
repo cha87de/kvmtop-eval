@@ -1,0 +1,24 @@
+#!/bin/gnuplot
+
+#set term png size 1500,900
+#set output 'result.png'
+set terminal pdf size 8,4.8
+set output 'result.pdf'
+
+
+#x axis formatting
+set xlabel 'Time'
+#set xdata time
+#set timefmt "%s"
+#set format x "%H:%M:%S"
+
+#y axis formatting
+set ylabel 'Network I/O [MB/s]'
+
+# styles
+set style line 1 lt 1 lw 2 lc rgb "#3a3a3a"
+set style line 2 lt 2 lw 1 lc rgb "#aaaaaa"
+
+set autoscale
+
+plot "result.csv" using :1:2 with errorbars ls 2 title 'Standard Deviation', "" using :1 with lines ls 1 title 'Diffs'
