@@ -1,0 +1,28 @@
+#!/bin/gnuplot
+
+#set term png size 1500,900
+#set output 'result-vmload.png'
+set terminal pdf size 8,4.8
+set output 'result-vmload.pdf'
+
+#x axis formatting
+set xlabel 'Time'
+#set xdata time
+#set timefmt "%s"
+#set format x "%H:%M:%S"
+
+#y axis formatting
+set ylabel 'CPU Util [%]'
+
+# styles
+set style line 1 lt 1 lw 2 lc rgb "#3a3a3a"
+set style line 2 lt 2 lw 1 lc rgb "#aaaaaa"
+
+set autoscale
+
+#plot "result-uuid${uuid}.csv" using :1:2 with errorbars ls 2 title 'Standard Deviation', "" using :1 with lines ls 1 title 'VM ${i}'
+plot "result-uuid2d891541-a416-43e5-9f12-e18b1252ca62.csv" using :1:2 with errorbars ls 2 title '', "" using :1 with lines title 'VM 2d89', \
+"result-uuid47d1a868-d77a-45bc-be91-e6a1d725f9a3.csv" using :1:2 with errorbars ls 2 title '', "" using :1 with lines title 'VM 47d1', \
+"result-uuid6b1e6355-c8a6-422f-b6f9-fa20a72153d4.csv" using :1:2 with errorbars ls 2 title '', "" using :1 with lines title 'VM 6b1e', \
+"result-uuidab22bcbd-413f-4c2c-b6f9-3b04f4a38ad8.csv" using :1:2 with errorbars ls 2 title '', "" using :1 with lines title 'VM ab22', \
+"result-uuidf8d3d4d2-8136-4a7f-bcc9-0d04d76a3307.csv" using :1:2 with errorbars ls 2 title '', "" using :1 with lines title 'VM f8d3', \

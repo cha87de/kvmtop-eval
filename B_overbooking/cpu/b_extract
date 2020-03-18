@@ -52,7 +52,7 @@ function main(){
         end=$(echo "$start + 70" | bc)
 
         log "Handle run from $(date -d@${start}) to $(date -d@${end})"
-        #dumpInfluxData $n $start $end
+        dumpInfluxData $n $start $end
         cleanInfluxData $n
         filesOverbooking="$filesOverbooking ./data/${nr}-kvmtop-overbooking-clean.csv"
         let n=$n+1
