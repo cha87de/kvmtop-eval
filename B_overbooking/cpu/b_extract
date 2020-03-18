@@ -1,0 +1,85 @@
+#!/bin/bash
+#set -x
+source /usr/local/bin/log
+source /usr/local/bin/retry
+source ../../lib/config.sh
+source ../../lib/influx/query.sh
+
+function dumpInfluxData(){
+    nr=$1
+    start=$2
+    end=$3
+
+    # kvmtop overbooking measure
+    log "... export kvmtop overbooking"
+    query="SELECT mean(\"cpu_steal\") AS \"mean_cpu_steal\" FROM \"kvmtop\".\"autogen\".\"kvmtop.domains\" WHERE time >= ${start}s AND time <= ${end}s GROUP BY time(1s) FILL(null)"
+    influx_query "$query" > ./data/${nr}-kvmtop-overbooking.csv
+
+    # kvmtop vm-load measures
+    log "... export kvmtop vmload"
+    query="SELECT sum(\"cpu_total\") AS \"sum_cpu_total\" FROM ( SELECT mean(\"cpu_total\") AS \"cpu_total\" FROM \"kvmtop\".\"autogen\".\"kvmtop.domains\" WHERE time >= ${start}s AND time <= ${end}s GROUP BY time(1s), \"UUID\" FILL(null) ) GROUP BY time(1s), \"UUID\" FILL(none)"
+    influx_query "$query" > ./data/${nr}-kvmtop-vmload.csv
+}
+
+function cleanInfluxData(){
+    nr=$1
+
+    fileKvmtopOverbooking="./data/${nr}-kvmtop-overbooking.csv"
+    fileKvmtopOverbookingClean="./data/${nr}-kvmtop-overbooking-clean.csv"
+    fileKvmtopVmload="./data/${nr}-kvmtop-vmload.csv"
+    fileKvmtopVmloadClean="./data/${nr}-kvmtop-vmload-clean.csv"
+    
+
+    cat $fileKvmtopOverbooking | tail -n+3 | cut -d',' -f3 > $fileKvmtopOverbookingClean
+    cat $fileKvmtopVmload | tail -n+3 | grep "UUID" | cut -d',' -f2,4 > $fileKvmtopVmloadClean
+
+    # split vmload file into one file per UUID
+    rm -f ./data/${nr}-kvmtop-vmload-uuid*
+    while IFS="," read -r a b; do
+        uuid=$(echo "$a" | cut -d'=' -f2)
+        echo "$b" >> ./data/${nr}-kvmtop-vmload-uuid${uuid}.csv
+    done <$fileKvmtopVmloadClean
+}
+
+function main(){
+
+    mkdir -p ./data
+
+    let n=0
+    filesOverbooking=""
+    while read row; do
+        start=$(date +%s -d"$row")
+        end=$(echo "$start + 70" | bc)
+
+        log "Handle run from $(date -d@${start}) to $(date -d@${end})"
+        #dumpInfluxData $n $start $end
+        cleanInfluxData $n
+        filesOverbooking="$filesOverbooking ./data/${nr}-kvmtop-overbooking-clean.csv"
+        let n=$n+1
+    done <./runs.log
+
+    # calculate avg over all runs
+    ../../lib/avgcsv.py $filesOverbooking > result-overbooking.csv
+
+    # calculate avg over all runs for each UUID separately
+    cp ./plot-vmload.tmpl ./plot-vmload
+    uuids=$(cat ./data/*-kvmtop-vmload.csv | tail -n+3 | grep "UUID=" | cut -d',' -f2 | cut -d'=' -f2 | sort | uniq)
+    for uuid in $uuids; do
+        filesUuid=""
+        for ((i=0;i<$n;i++)); do
+            filesUuid="$filesUuid ./data/${i}-kvmtop-vmload-uuid${uuid}.csv"
+        done
+        ../../lib/avgcsv.py $filesUuid > result-uuid${uuid}.csv
+
+        echo "\"result-uuid${uuid}.csv\" using :1:2 with errorbars ls 2 title '', \"\" using :1 with lines title 'VM ${uuid:0:4}', \\" >> ./plot-vmload
+    done
+
+
+
+    # plot averages
+    ./plot-overbooking
+    ./plot-vmload
+
+}
+
+main $@

@@ -1,0 +1,17 @@
+version: '2'
+services:
+  stress:
+    privileged: true
+    image: cha87de/stresser
+    stdin_open: true
+    command: "/bin/bash -c 'sleep 5; cpu-stress-full 60'"
+    network_mode: host
+    volumes:
+    - /dev:/dev
+    tty: true
+    pid: host
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.start_once: 'true'
+      io.rancher.scheduler.affinity:host_label: type=worker
+      io.rancher.scheduler.global: 'true'      
